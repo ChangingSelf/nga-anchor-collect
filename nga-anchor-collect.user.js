@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA安价快捷收集
 // @namespace    http://tampermonkey.net/
-// @version      2025-11-28
+// @version      1.0.0
 // @description  点击楼层内容即可复制，去除引用块和空行，作为安价结算用的选项
 // @author       ChangingSelf
 // @match        https://ngabbs.com/read.php*
