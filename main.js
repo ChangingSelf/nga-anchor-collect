@@ -1,12 +1,16 @@
 // ==UserScript==
-// @name         安价快捷收集
+// @name         NGA安价快捷收集
 // @namespace    http://tampermonkey.net/
 // @version      2025-11-28
-// @description  点击楼层即可复制安价内容，会去除引用块
+// @description  点击楼层内容即可复制，去除引用块和空行，作为安价结算用的选项
 // @author       ChangingSelf
 // @match        https://ngabbs.com/read.php*
-// @icon         https://www.google.com/s2/favicons?sz=64&domain=ngabbs.com
+// @match        https://bbs.nga.cn/read.php*
+// @match        https://nga.178.com/read.php*
+// @match        https://g.nga.cn/read.php*
+// @icon         https://img.nga.178.com/attachments/mon_202107/02/-otpguQ2o-bowcK2S14-14.png
 // @grant        GM_addStyle
+// @license      MIT
 // ==/UserScript==
 
 (function() {
@@ -16,10 +20,14 @@
       /* 悬停时的文本凸出阴影效果 */
       .post-content-hover {
           cursor: pointer;
-          transition: text-shadow 0.3s ease-in-out;
+          transition: all 0.3s ease-in-out;
+          display: inline-block;
+          border-radius: 6px;
+          padding: 4px;
       }
       .post-content-hover:hover {
-          text-shadow: 0 0 8px rgba(255, 215, 0, 0.7); /* 金色发光效果 */
+          outline: 3px solid #FF6B35; /* 醒目的橙色描边 */
+          outline-offset: -1px;
       }
 
       /* 复制成功/失败提示框 */
