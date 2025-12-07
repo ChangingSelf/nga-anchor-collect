@@ -664,7 +664,7 @@
 
           if (matchCount === 0) {
               if (excludedCount > 0) {
-                  showToast(`找到匹配楼层但已排除 ${excludedCount} 个UID`, false);
+                  showToast(`找到匹配楼层但已排除 ${excludedCount} 个楼层`, false);
               } else {
                   showToast(`未找到包含"${config.autoCollectRegex}"的楼层`, false);
               }
@@ -681,7 +681,7 @@
 
                   let message = `成功收集 ${matchCount} 条内容并复制到剪贴板`;
                   if (excludedCount > 0) {
-                      message += `，已排除 ${excludedCount} 个UID`;
+                      message += `，已排除 ${excludedCount} 个楼层`;
                   }
                   showToast(message);
               })
