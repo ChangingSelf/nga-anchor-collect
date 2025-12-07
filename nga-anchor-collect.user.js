@@ -134,13 +134,32 @@
           border: 1px solid #ddd;
           border-radius: 4px;
       }
+      .config-number {
+          margin: 15px 0;
+          text-align: center;
+      }
+      .config-number label {
+          display: block;
+          font-size: 14px;
+          color: #333;
+          margin-bottom: 5px;
+      }
+      .config-number input {
+          width: 60px;
+          padding: 5px;
+          text-align: center;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+      }
       .config-buttons {
           display: flex;
+          flex-wrap: wrap;
           gap: 10px;
           margin-top: 20px;
       }
       .config-buttons button {
           flex: 1;
+          min-width: 100px;
           padding: 8px 16px;
           border: none;
           border-radius: 4px;
@@ -155,6 +174,13 @@
       }
       #nga-reset-btn:hover {
           background: #d32f2f;
+      }
+      #nga-dice-btn {
+          background: #2196F3;
+          color: white;
+      }
+      #nga-dice-btn:hover {
+          background: #1976D2;
       }
       #nga-close-btn {
           background: #607D8B;
@@ -296,10 +322,15 @@
             <input type="checkbox" id="add-floor-number" ${config.addFloorNumber ? 'checked' : ''}>
         </div>
         <div class="config-number">
-            <label for="current-number">当前编号</label>
+            <label for="current-number">下一个编号</label>
             <input type="number" id="current-number" value="${config.currentNumber}" min="1">
         </div>
+        <div class="config-number">
+            <label for="collected-count">已收集数量</label>
+            <input type="number" id="collected-count" value="${config.currentNumber - 1}" min="0" readonly style="background: #f5f5f5;">
+        </div>
         <div class="config-buttons">
+            <button id="nga-dice-btn">生成骰点</button>
             <button id="nga-reset-btn">重置编号</button>
             <button id="nga-close-btn">关闭</button>
         </div>
@@ -376,10 +407,27 @@
         }
     });
 
+    // 生成骰点
+    document.getElementById('nga-dice-btn').addEventListener('click', () => {
+        const count = config.currentNumber - 1;
+        if (count > 0) {
+            const diceCode = `[dice]d${count}[/dice]`;
+            navigator.clipboard.writeText(diceCode)
+                .then(() => showToast(`已复制骰点代码: ${diceCode}`))
+                .catch(err => {
+                    console.error('无法复制骰点代码: ', err);
+                    showToast('复制失败，请手动复制', false);
+                });
+        } else {
+            showToast('没有收集到任何选项', false);
+        }
+    });
+
     // 重置编号
     document.getElementById('nga-reset-btn').addEventListener('click', () => {
         config.currentNumber = 1;
         document.getElementById('current-number').value = 1;
+        document.getElementById('collected-count').value = 0;
         saveConfig();
         showToast('编号已重置');
     });
@@ -462,8 +510,12 @@
               textToCopy = `${config.currentNumber}. ${textToCopy}`;
           }
           config.currentNumber++;
-          saveConfig();
+
+          // 更新显示
           document.getElementById('current-number').value = config.currentNumber;
+          document.getElementById('collected-count').value = config.currentNumber - 1;
+
+          saveConfig();
       } else if (floorNumberText) {
           textToCopy = `${floorNumberText}${textToCopy}`;
       }
