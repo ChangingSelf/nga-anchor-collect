@@ -23,6 +23,7 @@
     autoNumber: GM_getValue('autoNumber', true),
     enabled: GM_getValue('enabled', true),
     currentNumber: GM_getValue('currentNumber', 1),
+    addFloorNumber: GM_getValue('addFloorNumber', false),
     btnPosition: GM_getValue('btnPosition', null)
   };
 
@@ -31,6 +32,7 @@
     GM_setValue('autoNumber', config.autoNumber);
     GM_setValue('enabled', config.enabled);
     GM_setValue('currentNumber', config.currentNumber);
+    GM_setValue('addFloorNumber', config.addFloorNumber);
     if (config.btnPosition) {
       GM_setValue('btnPosition', config.btnPosition);
     }
@@ -289,6 +291,10 @@
             <label for="auto-number">自动编号</label>
             <input type="checkbox" id="auto-number" ${config.autoNumber ? 'checked' : ''}>
         </div>
+        <div class="config-item">
+            <label for="add-floor-number">添加楼层号</label>
+            <input type="checkbox" id="add-floor-number" ${config.addFloorNumber ? 'checked' : ''}>
+        </div>
         <div class="config-number">
             <label for="current-number">当前编号</label>
             <input type="number" id="current-number" value="${config.currentNumber}" min="1">
@@ -350,6 +356,12 @@
     // 自动编号切换
     document.getElementById('auto-number').addEventListener('change', (e) => {
         config.autoNumber = e.target.checked;
+        saveConfig();
+    });
+
+    // 添加楼层号切换
+    document.getElementById('add-floor-number').addEventListener('change', (e) => {
+        config.addFloorNumber = e.target.checked;
         saveConfig();
     });
 
@@ -433,12 +445,27 @@
           return false;
       }
 
-      // 添加编号
+      // 获取楼层号
+      let floorNumberText = '';
+      if (config.addFloorNumber && element.id) {
+          const match = element.id.match(/postcontent(\d+)/);
+          if (match) {
+              floorNumberText = `(${match[1]}L) `;
+          }
+      }
+
+      // 添加编号和楼层号
       if (config.autoNumber) {
-          textToCopy = `${config.currentNumber}. ${textToCopy}`;
+          if (floorNumberText) {
+              textToCopy = `${config.currentNumber}. ${floorNumberText}${textToCopy}`;
+          } else {
+              textToCopy = `${config.currentNumber}. ${textToCopy}`;
+          }
           config.currentNumber++;
           saveConfig();
           document.getElementById('current-number').value = config.currentNumber;
+      } else if (floorNumberText) {
+          textToCopy = `${floorNumberText}${textToCopy}`;
       }
 
       // 只添加一个换行符
