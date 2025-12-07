@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         NGA安价快捷收集
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
-// @description  点击楼层内容即可复制，去除引用块和空行，作为安价结算用的选项
+// @version      1.1.0
+// @description  点击楼层内容即可复制，支持自动编号、保留格式、保留空行等配置
 // @author       ChangingSelf
 // @match        https://ngabbs.com/read.php*
 // @match        https://bbs.nga.cn/read.php*
@@ -10,13 +10,158 @@
 // @match        https://g.nga.cn/read.php*
 // @icon         https://img.nga.178.com/attachments/mon_202107/02/-otpguQ2o-bowcK2S14-14.png
 // @grant        GM_addStyle
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @license      MIT
 // ==/UserScript==
 
 (function() {
   'use strict';
-// 1. 添加悬停效果和提示框的样式
+
+  // 配置管理
+  const config = {
+    autoNumber: GM_getValue('autoNumber', true),
+    enabled: GM_getValue('enabled', true),
+    currentNumber: GM_getValue('currentNumber', 1),
+    btnPosition: GM_getValue('btnPosition', null)
+  };
+
+  // 保存配置
+  function saveConfig() {
+    GM_setValue('autoNumber', config.autoNumber);
+    GM_setValue('enabled', config.enabled);
+    GM_setValue('currentNumber', config.currentNumber);
+    if (config.btnPosition) {
+      GM_setValue('btnPosition', config.btnPosition);
+    }
+  }
+
+  // 添加配置按钮样式和面板样式
   GM_addStyle(`
+      /* 配置按钮 */
+      #nga-config-btn {
+          position: fixed;
+          top: 50%;
+          right: 10px;
+          transform: translateY(-50%);
+          width: 40px;
+          height: 40px;
+          background: ${config.enabled ? '#FF6B35' : '#999'};
+          color: white;
+          border: none;
+          border-radius: 50%;
+          cursor: move;
+          font-size: 18px;
+          font-weight: bold;
+          z-index: 999999;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+          user-select: none;
+      }
+      #nga-config-btn:not([style*="left"]) {
+          right: 10px;
+      }
+      #nga-config-btn:hover {
+          background: ${config.enabled ? '#ff8533' : '#777'};
+      }
+      #nga-config-btn:hover:not(.dragging) {
+          transform: translateY(-50%) scale(1.1);
+      }
+      #nga-config-btn.dragging {
+          cursor: grabbing;
+          transition: none;
+          opacity: 0.8;
+      }
+
+      /* 配置面板 */
+      #nga-config-panel {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 260px;
+          background: white;
+          border: 2px solid #FF6B35;
+          border-radius: 8px;
+          padding: 20px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+          z-index: 999999;
+          display: none;
+      }
+      #nga-config-btn:not(.dragging):active {
+          cursor: pointer;
+      }
+      #nga-config-panel.show {
+          display: block;
+      }
+      #nga-config-panel h3 {
+          margin: 0 0 15px 0;
+          color: #FF6B35;
+          font-size: 18px;
+          text-align: center;
+      }
+      .config-item {
+          margin: 15px 0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+      }
+      .config-item label {
+          font-size: 14px;
+          color: #333;
+          flex: 1;
+      }
+      .config-item input[type="checkbox"] {
+          width: 18px;
+          height: 18px;
+          margin: 0;
+      }
+      .config-number {
+          margin: 15px 0;
+          text-align: center;
+      }
+      .config-number label {
+          display: block;
+          font-size: 14px;
+          color: #333;
+          margin-bottom: 5px;
+      }
+      .config-number input {
+          width: 60px;
+          padding: 5px;
+          text-align: center;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+      }
+      .config-buttons {
+          display: flex;
+          gap: 10px;
+          margin-top: 20px;
+      }
+      .config-buttons button {
+          flex: 1;
+          padding: 8px 16px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: bold;
+          transition: all 0.3s;
+      }
+      #nga-reset-btn {
+          background: #f44336;
+          color: white;
+      }
+      #nga-reset-btn:hover {
+          background: #d32f2f;
+      }
+      #nga-close-btn {
+          background: #607D8B;
+          color: white;
+      }
+      #nga-close-btn:hover {
+          background: #455A64;
+      }
+
       /* 悬停时的文本凸出阴影效果 */
       .post-content-hover {
           cursor: pointer;
@@ -26,7 +171,7 @@
           padding: 4px;
       }
       .post-content-hover:hover {
-          outline: 3px solid #FF6B35; /* 醒目的橙色描边 */
+          outline: 3px solid #FF6B35;
           outline-offset: -1px;
       }
 
@@ -47,19 +192,205 @@
           opacity: 1;
       }
       .copy-toast.success {
-          background-color: #4CAF50; /* 绿色 */
+          background-color: #4CAF50;
       }
       .copy-toast.error {
-          background-color: #f44336; /* 红色 */
+          background-color: #f44336;
       }
   `);
 
-  // 2. 创建复制提示框
+  // 2. 创建配置按钮和面板
+  function createConfigUI() {
+    // 创建配置按钮
+    const configBtn = document.createElement('button');
+    configBtn.id = 'nga-config-btn';
+    configBtn.textContent = '⚙';
+    configBtn.title = 'NGA安价收集配置 - 可拖动';
+
+    // 如果有保存的位置，应用它
+    if (config.btnPosition) {
+      configBtn.style.top = config.btnPosition.top;
+      configBtn.style.left = config.btnPosition.left;
+      configBtn.style.right = 'auto';
+      configBtn.style.transform = config.btnPosition.transform;
+    } else {
+      // 设置初始位置
+      const viewportWidth = window.innerWidth;
+      configBtn.style.top = '50%';
+      configBtn.style.left = (viewportWidth - 50) + 'px';
+      configBtn.style.right = 'auto';
+      configBtn.style.transform = 'translateY(-50%)';
+    }
+
+    document.body.appendChild(configBtn);
+
+    // 添加拖动功能
+    let isDragging = false;
+    let startY, startX;
+
+    // 鼠标按下时开始拖动
+    configBtn.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        configBtn.classList.add('dragging');
+
+        const btnRect = configBtn.getBoundingClientRect();
+        startY = e.clientY - btnRect.top; // 鼠标相对于按钮顶部的偏移
+        startX = e.clientX - btnRect.left; // 鼠标相对于按钮左侧的偏移
+
+        
+        e.preventDefault();
+    });
+
+    // 鼠标移动时更新位置
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+
+        // 计算新位置（考虑鼠标偏移）
+        const newTop = e.clientY - startY;
+        const newLeft = e.clientX - startX;
+
+        // 限制在视窗内
+        const maxTop = window.innerHeight - 40;
+        const maxLeft = window.innerWidth - 40;
+
+        configBtn.style.top = Math.max(0, Math.min(newTop, maxTop)) + 'px';
+        configBtn.style.left = Math.max(0, Math.min(newLeft, maxLeft)) + 'px';
+        configBtn.style.right = 'auto';
+        configBtn.style.transform = 'translateY(0)';
+    });
+
+    // 鼠标释放时停止拖动并保存位置
+    document.addEventListener('mouseup', () => {
+        if (!isDragging) return;
+
+        isDragging = false;
+        configBtn.classList.remove('dragging');
+
+        // 保存位置（只保存实际使用的值）
+        config.btnPosition = {
+            top: configBtn.style.top,
+            left: configBtn.style.left,
+            transform: configBtn.style.transform || 'translateY(0)'
+        };
+        saveConfig();
+    });
+
+    
+    // 创建配置面板
+    const panel = document.createElement('div');
+    panel.id = 'nga-config-panel';
+    panel.innerHTML = `
+        <h3>安价收集配置</h3>
+        <div class="config-item">
+            <label for="nga-enabled">启用收集</label>
+            <input type="checkbox" id="nga-enabled" ${config.enabled ? 'checked' : ''}>
+        </div>
+        <div class="config-item">
+            <label for="auto-number">自动编号</label>
+            <input type="checkbox" id="auto-number" ${config.autoNumber ? 'checked' : ''}>
+        </div>
+        <div class="config-number">
+            <label for="current-number">当前编号</label>
+            <input type="number" id="current-number" value="${config.currentNumber}" min="1">
+        </div>
+        <div class="config-buttons">
+            <button id="nga-reset-btn">重置编号</button>
+            <button id="nga-close-btn">关闭</button>
+        </div>
+    `;
+    document.body.appendChild(panel);
+
+    // 更新按钮状态
+    function updateButtonStatus() {
+        configBtn.style.background = config.enabled ? '#FF6B35' : '#999';
+        configBtn.style.boxShadow = config.enabled ? '0 2px 10px rgba(0,0,0,0.3)' : '0 2px 10px rgba(0,0,0,0.1)';
+    }
+
+    // 事件处理
+    configBtn.addEventListener('click', () => {
+        // 如果刚刚结束拖动，不触发点击
+        if (isDragging || configBtn.classList.contains('dragging')) {
+            return;
+        }
+
+        // 面板始终显示在屏幕中央
+        panel.style.top = '50%';
+        panel.style.left = '50%';
+        panel.style.right = 'auto';
+        panel.style.transform = 'translate(-50%, -50%)';
+
+        panel.classList.toggle('show');
+    });
+
+    // 启用/禁用切换
+    document.getElementById('nga-enabled').addEventListener('change', (e) => {
+        config.enabled = e.target.checked;
+        saveConfig();
+        updateButtonStatus();
+
+        // 更新楼层的交互状态 - 使用id来查找所有postcontent元素
+        const allCandidates = document.querySelectorAll('[id^="postcontent"]');
+        const postContents = Array.from(allCandidates).filter(element => {
+            return /^postcontent\d+$/.test(element.id);
+        });
+
+        postContents.forEach(content => {
+            if (config.enabled) {
+                content.classList.add('post-content-hover');
+                content.style.cursor = 'pointer';
+            } else {
+                content.classList.remove('post-content-hover');
+                content.style.cursor = 'default';
+            }
+        });
+
+        showToast(config.enabled ? '安价收集已启用' : '安价收集已关闭');
+    });
+
+    // 自动编号切换
+    document.getElementById('auto-number').addEventListener('change', (e) => {
+        config.autoNumber = e.target.checked;
+        saveConfig();
+    });
+
+    // 当前编号修改
+    document.getElementById('current-number').addEventListener('change', (e) => {
+        const num = parseInt(e.target.value);
+        if (num >= 1) {
+            config.currentNumber = num;
+            saveConfig();
+        } else {
+            e.target.value = config.currentNumber;
+        }
+    });
+
+    // 重置编号
+    document.getElementById('nga-reset-btn').addEventListener('click', () => {
+        config.currentNumber = 1;
+        document.getElementById('current-number').value = 1;
+        saveConfig();
+        showToast('编号已重置');
+    });
+
+    // 关闭面板
+    document.getElementById('nga-close-btn').addEventListener('click', () => {
+        panel.classList.remove('show');
+    });
+
+    // 点击面板外部关闭
+    document.addEventListener('click', (e) => {
+        if (!panel.contains(e.target) && !configBtn.contains(e.target)) {
+            panel.classList.remove('show');
+        }
+    });
+  }
+
+  // 3. 创建复制提示框
   let toast = document.createElement('div');
   toast.className = 'copy-toast';
   document.body.appendChild(toast);
 
-  // 3. 显示提示框的函数
+  // 4. 显示提示框的函数
   function showToast(message, isSuccess = true) {
       toast.textContent = message;
       toast.classList.remove('success', 'error', 'show');
@@ -68,7 +399,7 @@
       setTimeout(() => toast.classList.remove('show'), 2000);
   }
 
-  // 4. 深度清理所有 .quote 元素
+  // 5. 深度清理所有 .quote 元素
   function deepCleanQuotes(element) {
       const clone = element.cloneNode(true);
       const quotes = clone.querySelectorAll('.quote');
@@ -76,17 +407,44 @@
       return clone;
   }
 
-  // 5. 核心复制逻辑函数
+  // 获取文本内容
+  function getTextContent(element) {
+    // 清理引用块并获取文本
+    const cleanedElement = deepCleanQuotes(element);
+    let text = cleanedElement.innerText || cleanedElement.textContent || '';
+
+    // 移除多余空行
+    text = text.replace(/\n\s*\n/g, '\n');
+
+    return text.trim();
+  }
+
+  // 6. 核心复制逻辑函数
   function copyPostContent(element) {
+      if (!config.enabled) {
+          return false;
+      }
+
       const cleanedElement = deepCleanQuotes(element);
-      const textToCopy = cleanedElement.innerText.trim();
+      let textToCopy = getTextContent(cleanedElement);
 
       if (!textToCopy) {
           showToast('复制失败：没有可复制的文本', false);
           return false;
       }
 
-      navigator.clipboard.writeText(textToCopy+'\n')
+      // 添加编号
+      if (config.autoNumber) {
+          textToCopy = `${config.currentNumber}. ${textToCopy}`;
+          config.currentNumber++;
+          saveConfig();
+          document.getElementById('current-number').value = config.currentNumber;
+      }
+
+      // 只添加一个换行符
+      textToCopy += '\n';
+
+      navigator.clipboard.writeText(textToCopy)
           .then(() => showToast('复制成功！'))
           .catch(err => {
               console.error('无法复制文本: ', err);
@@ -96,8 +454,11 @@
       return true;
   }
 
-  // 6. 为目标楼层内容元素添加功能（核心修正点）
+  // 7. 为目标楼层内容元素添加功能（核心修正点）
   function init() {
+      // 创建配置UI
+      createConfigUI();
+
       // 使用更宽泛的选择器，然后用 filter 进行精确过滤
       const allCandidates = document.querySelectorAll('[id^="postcontent"]');
 
@@ -107,7 +468,11 @@
       });
 
       postContents.forEach(content => {
-          content.classList.add('post-content-hover');
+          if (config.enabled) {
+              content.classList.add('post-content-hover');
+          }
+          // 根据启用状态设置鼠标样式
+          content.style.cursor = config.enabled ? 'pointer' : 'default';
           content.addEventListener('click', function(e) {
               if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
               copyPostContent(this);
